@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pruebas · Finanzas Hogar</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #fff; color: #111; padding: 16px; max-width: 760px; margin: auto; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } }
+  .p { color: #12A46B; } .f { color: #E5484D; font-weight: 600; } h3 { margin: 18px 0 6px; } div { padding: 2px 0; font-size: 14px; }
+</style></head>
+<body><div id="out">Corriendo pruebas…</div>
+<script type="module">
+  import('./run.js').catch(e => { document.getElementById('out').innerHTML = '<h1>❌ Error al correr</h1><pre>' + e.stack + '</pre>'; window.__results = { error: String(e) }; });
+</script></body></html>
