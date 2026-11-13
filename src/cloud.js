@@ -32,6 +32,7 @@ export const remote = {
   },
   async createHousehold() { return check(await sb.rpc('create_household')); },
   async joinHousehold(code) { return check(await sb.rpc('join_household', { code })); },
+  async rpc(name, args) { return check(await sb.rpc(name, args)); },
   async uploadReceipt(path, blob) {
     check(await sb.storage.from('receipts').upload(path, blob, { upsert: true, contentType: 'image/jpeg' }));
     return path;

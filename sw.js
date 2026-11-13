@@ -1,6 +1,6 @@
 // Service worker: la app abre sin internet (los DATOS viven en IndexedDB, no aquí).
 // Al publicar una versión nueva, sube el número de VERSION.
-const VERSION = 'fh-v1.0.1';
+const VERSION = 'fh-v1.1.0';
 const SHELL = [
   './', 'index.html', 'styles.css', 'config.js', 'manifest.webmanifest',
   'vendor/preact-htm.js', 'vendor/supabase.js', 'vendor/xlsx.full.min.js',
@@ -8,7 +8,7 @@ const SHELL = [
   'src/logic/util.js', 'src/logic/stats.js', 'src/logic/importer.js', 'src/logic/recurring.js',
   'src/logic/insights.js', 'src/logic/seed.js', 'src/logic/fx.js',
   'src/ui/common.js', 'src/ui/add.js', 'src/ui/home.js', 'src/ui/history.js', 'src/ui/stats.js',
-  'src/ui/manage.js', 'src/ui/dataio.js',
+  'src/ui/manage.js', 'src/ui/dataio.js', 'src/ui/extras.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
 self.addEventListener('install', e => {

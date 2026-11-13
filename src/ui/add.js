@@ -3,7 +3,7 @@ import { html, useState, useEffect, useMemo, useRef } from '../../vendor/preact-
 import { Sheet, CatIcon, Seg, toast, confirmAsk } from './common.js';
 import {
   S, personalWallet, householdWallet, newTxDraft, saveTx, deleteTx, restoreTx, duplicateTx, categoryRanking,
-  categoriesOf, myAccounts, prefs, upsert,
+  categoriesOf, myAccounts, prefs, upsert, boxAccount,
 } from '../store.js';
 import { money, round2, pad } from '../logic/util.js';
 import { TX_TYPES, CURRENCIES } from '../logic/seed.js';
@@ -20,10 +20,10 @@ export function evalExpr(s) {
   return round2(t);
 }
 
-export function AddSheet({ editing, draft, presetWallet, onClose, onSaved }) {
+export function AddSheet({ editing, draft, presetWallet, presetAccount, onClose, onSaved }) {
   const isEdit = !!editing;
   const initialWallet = editing?.wallet_id || presetWallet || prefs.get('lastWallet') || personalWallet()?.id;
-  const [t, setT] = useState(() => editing ? { ...editing } : draft ? { ...draft } : newTxDraft(S.wallets.has(initialWallet) ? initialWallet : personalWallet()?.id));
+  const [t, setT] = useState(() => editing ? { ...editing } : draft ? { ...draft } : { ...newTxDraft(S.wallets.has(initialWallet) ? initialWallet : personalWallet()?.id), ...(presetAccount ? { account_id: presetAccount } : {}) });
   const [expr, setExpr] = useState(() => editing || draft ? String(+(editing || draft).amount) : '');
   const [allCats, setAllCats] = useState(false);
   const [more, setMore] = useState(isEdit && (editing.currency !== 'MXN' || editing.tags?.length || editing.note));
@@ -173,6 +173,9 @@ export function AddSheet({ editing, draft, presetWallet, onClose, onSaved }) {
           <div class="tiny muted" style="grid-column:span 2">No cuenta como gasto ni ingreso (evita contar doble).</div>
         </div>`}
 
+      ${!isMove && boxAccount() && t.wallet_id === hw?.id && html`<div class="chips" style="margin-top:8px">
+        <button class=${'chip' + (t.account_id === boxAccount().id ? ' on' : '')} onClick=${() => set({ account_id: t.account_id === boxAccount().id ? prefs.get('lastAccount:' + t.wallet_id, null) : boxAccount().id })}>💵 Pagado con caja chica</button>
+      </div>`}
       <div class="descrow" style="margin-top:10px">
         <input ref=${descRef} placeholder="Descripción (opcional)" value=${t.description} maxlength="200" list="desc-sug"
           onInput=${e => set({ description: e.target.value })} enterkeyhint="done" />

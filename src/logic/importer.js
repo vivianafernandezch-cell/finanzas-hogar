@@ -71,7 +71,7 @@ export const CATEGORY_SYNONYMS = {
   'beauty': 'Belleza', 'clothes': 'Ropa', 'clothing': 'Ropa', 'shopping': 'Compras', 'gifts': 'Regalos', 'gift': 'Regalos',
   'entertainment': 'Entretenimiento', 'travel': 'Viajes', 'viaje': 'Viajes', 'education': 'Educación',
   'bills & fees': 'Servicios', 'bills and fees': 'Servicios', 'bills': 'Servicios', 'utilities': 'Servicios',
-  'subscriptions': 'Suscripciones', 'charity': 'Donaciones', 'donations': 'Donaciones', 'work': 'Trabajo',
+  'subscriptions': 'Suscripciones', 'charity': 'Donaciones', 'donations': 'Donaciones', 'donacion': 'Donaciones', 'donativos': 'Donaciones', 'work': 'Trabajo',
   'sport & hobbies': 'Deportes y hobbies', 'sports': 'Deportes y hobbies', 'hobbies': 'Deportes y hobbies',
   'other': 'Otros', 'others': 'Otros', 'bebe': 'Bebé / Hijos', 'baby': 'Bebé / Hijos', 'kids': 'Bebé / Hijos', 'hijos': 'Bebé / Hijos',
   'family & personal': 'Bebé / Hijos', 'salary': 'Sueldo', 'sueldo': 'Sueldo', 'extra income': 'Otros ingresos',

@@ -1,6 +1,6 @@
 // IndexedDB mínimo. Una base por usuario → si Andrés abre sesión en el mismo equipo, no ve lo tuyo.
-export const TABLES = ['wallets', 'categories', 'accounts', 'import_batches', 'recurring', 'transactions', 'budgets'];
-const VERSION = 1;
+export const TABLES = ['wallets', 'categories', 'accounts', 'import_batches', 'recurring', 'transactions', 'budgets', 'handover_rules', 'handovers'];
+const VERSION = 2;
 
 export function openDb(name) {
   return new Promise((res, rej) => {

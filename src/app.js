@@ -8,12 +8,13 @@ import { History } from './ui/history.js';
 import { Stats, Insights, Trips, Trip } from './ui/stats.js';
 import { Budgets, More, Accounts, Categories, Recurring, Settings } from './ui/manage.js';
 import { Import, Export } from './ui/dataio.js';
+import { CashBox, Handovers } from './ui/extras.js';
 
 // Tema guardado
 const theme = prefs.get('theme', 'auto');
 if (theme !== 'auto') document.documentElement.setAttribute('data-theme', theme);
 
-const TABS = [['home', '🏠', 'Inicio'], ['history', '🧾', 'Historial'], null, ['stats', '📊', 'Gráficas'], ['budgets', '🎯', 'Presup.']];
+const TABS = [['home', '🏠', 'Inicio'], ['history', '🧾', 'Historial'], ['stats', '📊', 'Gráficas'], ['budgets', '🎯', 'Presup.']];
 const ROOT_TABS = ['home', 'history', 'stats', 'budgets', 'more'];
 
 function Shell() {
@@ -32,7 +33,7 @@ function Shell() {
   const openTx = t => setSheet({ editing: t });
 
   useEffect(() => {
-    const onAdd = e => setSheet({ wallet: e.detail?.wallet });
+    const onAdd = e => setSheet({ wallet: e.detail?.wallet, account: e.detail?.account });
     const onEdit = e => setSheet(e.detail.isNew ? { editing: null, draft: e.detail.tx } : { editing: e.detail.tx });
     window.addEventListener('fh:add', onAdd); window.addEventListener('fh:edit', onEdit);
     // Atajo: /?add=1 (para un atajo de iPhone en la pantalla de inicio)
@@ -57,6 +58,8 @@ function Shell() {
     case 'recurring': screen = html`<${Recurring} ...${props} />`; break;
     case 'import': screen = html`<${Import} ...${props} />`; break;
     case 'export': screen = html`<${Export} ...${props} />`; break;
+    case 'cashbox': screen = html`<${CashBox} ...${props} />`; break;
+    case 'handovers': screen = html`<${Handovers} ...${props} />`; break;
     case 'settings': screen = html`<${Settings} ...${props} onSignOut=${signOut} />`; break;
     default: screen = html`<${Home} ...${props} />`;
   }
@@ -64,12 +67,12 @@ function Shell() {
   return html`<div>
     ${screen}
     <nav class="tabbar" aria-label="Navegación">
-      ${TABS.map(t => t ? html`<button class=${tabOf === t[0] ? 'on' : ''} onClick=${() => go(t[0])}><span class="ic">${t[1]}</span>${t[2]}</button>` : html`<span class="spacer"></span>`)}
+      ${TABS.map(t => html`<button class=${tabOf === t[0] ? 'on' : ''} onClick=${() => go(t[0])}><span class="ic">${t[1]}</span>${t[2]}</button>`)}
       <button class=${tabOf === 'more' ? 'on' : ''} onClick=${() => go('more')}><span class="ic">☰</span>Más</button>
     </nav>
     <button class="fab" aria-label="Agregar movimiento" onClick=${() => setSheet({})}>+</button>
     ${sheet && html`<${AddSheet} key=${sheet.k} editing=${sheet.editing || null} draft=${sheet.draft || null}
-      presetWallet=${sheet.wallet} onClose=${() => setSheet(null)} />`}
+      presetWallet=${sheet.wallet} presetAccount=${sheet.account} onClose=${() => setSheet(null)} />`}
     <${Toaster} />
   </div>`;
 }

@@ -63,6 +63,7 @@ function BudgetForm({ b, onClose }) {
 export function More({ go }) {
   const S = useStore();
   const items = [
+    ['cashbox', '💵', 'Caja chica (Hogar)'], ['handovers', '🤝', 'Entregas con doble palomita (Magui)'],
     ['insights', '✨', 'Análisis inteligente'], ['trips', '🧳', 'Viajes y etiquetas'], ['recurring', '🔁', 'Programados (recurrentes)'],
     ['accounts', '💳', 'Cuentas y métodos de pago'], ['categories', '🗂️', 'Categorías'],
   ];

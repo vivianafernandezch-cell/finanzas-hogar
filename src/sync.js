@@ -5,7 +5,7 @@
 //  3. Conflictos: gana la última edición. Si una fila local está pendiente de subir, NO se pisa con la del servidor.
 import { TABLES, getOutbox, clearOutbox, markOutboxError, putRows, getMeta, setMeta } from './db.js';
 
-const PUSH_ORDER = ['accounts', 'categories', 'import_batches', 'recurring', 'transactions', 'budgets'];
+const PUSH_ORDER = ['accounts', 'categories', 'import_batches', 'recurring', 'transactions', 'budgets', 'handover_rules'];
 const CHUNK = 500;
 const OVERLAP_MS = 5 * 60 * 1000;   // relee 5 min hacia atrás por si hubo escrituras concurrentes
 

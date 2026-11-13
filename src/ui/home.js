@@ -5,8 +5,9 @@ import { filterTx, totals, monthlySeries, byCategory, pctChange } from '../logic
 import { periodRange, previousRange, comparableRange, money, monthName, cap, ymd, addMonths } from '../logic/util.js';
 import { dueOccurrences } from '../logic/recurring.js';
 import { computeInsights } from '../logic/insights.js';
+import { HogarCards } from './extras.js';
 
-export const PERIODS = [['month', 'Este mes'], ['prev', 'Mes anterior'], ['3m', '3 meses'], ['year', 'Este año'], ['custom', 'Personalizado']];
+export const PERIODS = [['month', 'Este mes'], ['prev', 'Mes anterior'], ['pick', '📅 Elegir mes'], ['3m', '3 meses'], ['year', 'Este año'], ['custom', 'Personalizado']];
 
 export function WalletSwitch({ value, onChange, allowBoth = false }) {
   const pw = personalWallet(), hw = householdWallet();
@@ -21,11 +22,28 @@ export function useWallet(key = 'homeWallet') {
 }
 export const walletIdsFor = w => w === 'both' ? [personalWallet()?.id, householdWallet()?.id].filter(Boolean) : [w];
 
-export function PeriodPicker({ period, setPeriod, custom, setCustom }) {
+export function PeriodPicker({ period, setPeriod, custom, setCustom, picked, setPicked }) {
   const [open, setOpen] = useState(false);
+  const [pickOpen, setPickOpen] = useState(false);
+  const [year, setYear] = useState(picked?.y ?? new Date().getFullYear());
+  const now = new Date();
+  const label = (k, l) => k === 'pick' && period === 'pick' && picked ? `📅 ${cap(monthName(new Date(picked.y, picked.m, 1)))} ${picked.y}` : l;
   return html`<div>
     <div class="chips">${PERIODS.map(([k, l]) => html`<button class=${'chip' + (period === k ? ' on' : '')}
-      onClick=${() => { if (k === 'custom') setOpen(true); setPeriod(k); }}>${l}</button>`)}</div>
+      onClick=${() => { if (k === 'custom') setOpen(true); if (k === 'pick') { setYear(picked?.y ?? now.getFullYear()); setPickOpen(true); return; } setPeriod(k); }}>${label(k, l)}</button>`)}</div>
+    ${pickOpen && html`<${Sheet} title="Elegir mes" onClose=${() => setPickOpen(false)}>
+      <div class="sheet-body">
+        <div class="row between" style="margin-bottom:12px">
+          <button class="iconbtn flat" onClick=${() => setYear(year - 1)} aria-label="Año anterior">‹</button>
+          <b style="font-size:20px">${year}</b>
+          <button class="iconbtn flat" disabled=${year >= now.getFullYear()} style=${year >= now.getFullYear() ? 'opacity:.3' : ''} onClick=${() => setYear(year + 1)} aria-label="Año siguiente">›</button>
+        </div>
+        <div class="monthgrid">
+          ${Array.from({ length: 12 }, (_, m) => { const future = year > now.getFullYear() || (year === now.getFullYear() && m > now.getMonth()); const on = period === 'pick' && picked?.y === year && picked?.m === m;
+            return html`<button class=${'chip' + (on ? ' on' : '')} disabled=${future} style=${future ? 'opacity:.3' : ''}
+              onClick=${() => { setPicked({ y: year, m }); setPeriod('pick'); setPickOpen(false); }}>${cap(monthName(new Date(year, m, 1), true))}</button>`; })}
+        </div>
+      </div><//>`}
     ${open && html`<${Sheet} title="Período personalizado" onClose=${() => setOpen(false)}>
       <div class="sheet-body">
         <div class="grid2">
@@ -40,8 +58,13 @@ export function PeriodPicker({ period, setPeriod, custom, setCustom }) {
 export function usePeriod(prefix) {
   const [period, setPeriod] = useState('month');
   const [custom, setCustom] = useState(() => ({ from: ymd(addMonths(new Date(), -1)), to: ymd(new Date()) }));
-  const range = periodRange(period, custom);
-  return { period, setPeriod, custom, setCustom, range };
+  const [picked, setPicked] = useState(null);
+  const range = period === 'pick' && picked
+    ? { from: new Date(picked.y, picked.m, 1), to: new Date(picked.y, picked.m + 1, 1), label: `${cap(monthName(new Date(picked.y, picked.m, 1)))} ${picked.y}` }
+    : periodRange(period === 'pick' ? 'month' : period, custom);
+  // Mes que termina la gráfica de 6 meses
+  const endMonth = period === 'pick' && picked ? new Date(picked.y, picked.m, 15) : period === 'prev' ? addMonths(new Date(), -1) : new Date();
+  return { period, setPeriod, custom, setCustom, picked, setPicked, range, endMonth };
 }
 
 export function Home({ openTx, go, onAdd }) {
@@ -56,8 +79,8 @@ export function Home({ openTx, go, onAdd }) {
   const prev = filterTx(all, cmp);
   const prevFull = cmp.partial ? totals(filterTx(all, previousRange(p.range))).spend : null;
   const tc = totals(cur), tp = totals(prev);
-  const series = monthlySeries(all, 6, p.period === 'prev' ? addMonths(new Date(), -1) : new Date());
-  const selKey = p.period === 'month' || p.period === 'prev' ? series[series.length - 1].key : null;
+  const series = monthlySeries(all, 6, p.endMonth);
+  const selKey = ['month', 'prev', 'pick'].includes(p.period) ? series[series.length - 1].key : null;
   const recent = [...all].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).slice(0, 12);
   const topCats = byCategory(cur, id => S.categories.get(id)?.parent_id).slice(0, 4);
   const due = recurringOf().filter(r => ids.includes(r.wallet_id)).reduce((n, r) => n + dueOccurrences(r).length, 0);
@@ -85,10 +108,11 @@ export function Home({ openTx, go, onAdd }) {
       </div>
       <div style="margin-top:16px">
         <${BarChart} data=${series.map(s => ({ label: cap(monthName(s.date, true)), value: s.spend, dim: s.key !== selKey, key: s.key }))}
-          onPick=${d => { p.setCustom({ from: d.key + '-01', to: ymd(new Date(new Date(d.key + '-01T12:00').getFullYear(), new Date(d.key + '-01T12:00').getMonth() + 1, 0)) }); p.setPeriod('custom'); }} />
+          onPick=${d => { const [y, m] = d.key.split('-').map(Number); p.setPicked({ y, m: m - 1 }); p.setPeriod('pick'); }} />
       </div>
     </div>
 
+    ${S.wallets.get(wallet)?.kind === 'household' && html`<${HogarCards} go=${go} />`}
     ${due > 0 && html`<button class="banner" onClick=${() => go('recurring')}>🔔 <span class="grow"><b>${due} pago${due > 1 ? 's' : ''} programado${due > 1 ? 's' : ''}</b> por confirmar</span><span class="chev">›</span></button>`}
     ${insight && insight.id !== 'empty' && html`<button class="banner" onClick=${() => go('insights')}>${insight.icon}<span class="grow small">${insight.title}</span><span class="chev">›</span></button>`}
 

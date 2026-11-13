@@ -96,7 +96,8 @@ export function validateTx(t) {
   if (!/^[A-Z]{3}$/.test(t.currency)) errs.push('Moneda no válida');
   if (!(+t.fx_rate > 0)) errs.push('Tipo de cambio no válido');
   if (['expense', 'income', 'refund'].includes(t.type) && !t.category_id) errs.push('Elige una categoría');
-  if (['transfer', 'card_payment'].includes(t.type) && (!t.account_id || !t.to_account_id)) errs.push('Elige cuenta de origen y destino');
+  const isBoxDeposit = t.type === 'transfer' && !t.account_id && S.accounts.get(t.to_account_id)?.is_box;
+  if (['transfer', 'card_payment'].includes(t.type) && !isBoxDeposit && (!t.account_id || !t.to_account_id)) errs.push('Elige cuenta de origen y destino');
   if (t.account_id && t.to_account_id && t.account_id === t.to_account_id) errs.push('Las cuentas deben ser distintas');
   if (!S.wallets.has(t.wallet_id)) errs.push('Cartera no válida');
   const c = t.category_id && S.categories.get(t.category_id);
@@ -333,7 +334,7 @@ export async function restoreJson(data) {
   if (data?.app !== 'finanzas-hogar') throw new Error('Este archivo no es un respaldo de la app');
   let n = 0;
   for (const t of TABLES) {
-    if (t === 'wallets' || !Array.isArray(data[t])) continue;
+    if (t === 'wallets' || t === 'handovers' || !Array.isArray(data[t])) continue;
     const rows = data[t].filter(r => t === 'accounts' || t === 'import_batches' || S.wallets.has(r.wallet_id) || remapWallet(r, data));
     if (S.mode === 'cloud' && t === 'accounts') rows.forEach(r => (r.owner_id = S.user.id));
     if (rows.length) { await upsert(t, rows, { silent: true }); n += rows.length; }
@@ -403,3 +404,98 @@ export async function loadDemoData() {
   emit();
   return rows.length;
 }
+
+
+// ================= 💵 Caja chica (Hogar) =================
+// Una cuenta de efectivo marcada is_box. Entradas = transferencias (no son gasto).
+// Gastos pagados con la caja = gastos normales de Hogar con account_id = caja (sí son gasto).
+export const boxAccount = () => [...S.accounts.values()].find(a => a.is_box && !a.deleted_at);
+export async function createBox() {
+  if (boxAccount()) return boxAccount();
+  await saveAccount({ name: 'Caja chica', type: 'cash', icon: '💵', is_box: true, sort: -1 });
+  return boxAccount();
+}
+export function boxMovements() {
+  const box = boxAccount(); if (!box) return { balance: 0, items: [] };
+  const list = [...S.transactions.values()]
+    .filter(t => !t.deleted_at && (t.account_id === box.id || t.to_account_id === box.id))
+    .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at) || (a.created_at || '').localeCompare(b.created_at || ''));
+  let bal = 0;
+  const items = list.map(t => {
+    const delta = t.to_account_id === box.id ? +t.amount_mxn : (t.type === 'refund' ? +t.amount_mxn : -t.amount_mxn);
+    bal = round2(bal + delta);
+    return { t, delta, balance: bal };
+  });
+  return { balance: bal, items: items.reverse() };
+}
+export async function addBoxDeposit({ amount, date, note }) {
+  const box = boxAccount(); const hw = householdWallet();
+  if (!box || !hw) throw new Error('Primero crea la caja chica');
+  const d = date ? new Date(date + 'T12:00:00') : new Date();
+  return saveTx({ ...newTxDraft(hw.id), type: 'transfer', account_id: null, to_account_id: box.id, category_id: null,
+    amount: +amount, description: note || 'Efectivo para la caja', occurred_at: d.toISOString() });
+}
+
+// ================= ✅✅ Entregas con doble palomita (ej. Magui) =================
+import { remote as cloudRemote } from './cloud.js';
+export const handoverRules = () => [...S.handover_rules.values()].filter(r => !r.deleted_at);
+export const handoversList = () => [...S.handovers.values()].filter(h => !h.deleted_at).sort((a, b) => b.period_date.localeCompare(a.period_date));
+
+export async function saveHandoverRule(r) {
+  const hw = householdWallet(); if (!hw) throw new Error('Primero crea Hogar');
+  const row = { frequency: 'weekly', active: true, wallet_id: hw.id, payee_id: S.user.id, ...r };
+  if (!row.id) { row.id = uuid(); row.created_at = nowIso(); row.created_by = S.user.id; }
+  if (!row.concept?.trim()) throw new Error('Ponle nombre (ej. Magui)');
+  if (!(+row.amount > 0)) throw new Error('Monto no válido');
+  if (!row.start_date) throw new Error('Elige la primera semana');
+  row.amount = round2(+row.amount);
+  await upsert('handover_rules', [row]);
+  await refreshHandovers();
+}
+
+// Genera semanas pendientes (en el servidor, sin duplicar) y baja los cambios
+export async function refreshHandovers() {
+  if (S.mode === 'cloud') {
+    if (!navigator.onLine) return;
+    await syncNow();                                   // sube reglas nuevas primero
+    try { await cloudRemote.rpc('ensure_handovers'); } catch (e) { console.warn(e); }
+    await syncNow();
+  } else {
+    const rows = [];
+    for (const r of handoverRules().filter(r => r.active)) {
+      const step = { weekly: 7, biweekly: 14 }[r.frequency];
+      let d = new Date(r.start_date + 'T12:00:00');
+      while (ymd(d) <= ymd(new Date())) {
+        const pd = ymd(d); const id = deterministicId(r.id, pd);
+        if (!S.handovers.has(id)) rows.push({ id, rule_id: r.id, wallet_id: r.wallet_id, concept: r.concept, amount: r.amount, period_date: pd, payee_id: r.payee_id, given_at: null, received_at: null, note: '', created_at: nowIso() });
+        if (step) d.setDate(d.getDate() + step); else d = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate(), 12);
+      }
+    }
+    if (rows.length) await upsert('handovers', rows);
+  }
+}
+
+export async function confirmHandover(h, side, done) {
+  if (S.mode === 'cloud') {
+    if (!navigator.onLine) throw new Error('Necesitas internet para confirmar (así los dos ven lo mismo).');
+    await cloudRemote.rpc('confirm_handover', { h: h.id, side, done });
+    await syncNow();
+  } else {
+    const patch = side === 'given' ? { given_at: done ? nowIso() : null, given_by: done ? S.user.id : null } : { received_at: done ? nowIso() : null, received_by: done ? S.user.id : null };
+    await upsert('handovers', [{ id: h.id, ...patch }]);
+  }
+}
+export async function editHandover(h, amount, note) {
+  if (S.mode === 'cloud') { await cloudRemote.rpc('edit_handover', { h: h.id, new_amount: +amount, new_note: note || '' }); await syncNow(); }
+  else { const changed = +amount !== +h.amount; await upsert('handovers', [{ id: h.id, amount: round2(+amount), note: note || '', ...(changed ? { given_at: null, received_at: null } : {}) }]); }
+}
+export async function addHandover({ concept, amount, date }) {
+  const hw = householdWallet();
+  if (S.mode === 'cloud') { await cloudRemote.rpc('add_handover', { w: hw.id, p_concept: concept, p_amount: +amount, p_date: date, p_payee: S.user.id }); await syncNow(); }
+  else await upsert('handovers', [{ id: uuid(), rule_id: null, wallet_id: hw.id, concept, amount: round2(+amount), period_date: date, payee_id: S.user.id, given_at: null, received_at: null, note: '', created_at: nowIso() }]);
+}
+export async function deleteHandover(h) {
+  if (S.mode === 'cloud') { await cloudRemote.rpc('delete_handover', { h: h.id }); await syncNow(); }
+  else await upsert('handovers', [{ id: h.id, deleted_at: nowIso() }]);
+}
+export const handoverStatus = h => h.given_at && h.received_at ? 'ok' : h.given_at || h.received_at ? 'half' : 'none';
